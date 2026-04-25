@@ -1,0 +1,188 @@
+// This is your Prisma schema file
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role
+  avatar       String?
+  phone        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  student  Student?
+  teacher  Teacher?
+  sessions Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Student {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @unique @db.ObjectId
+  rollNumber  String   @unique
+  classId     String   @db.ObjectId
+  dateOfBirth DateTime?
+  parentName  String?
+  parentPhone String?
+  address     String?
+  faceData    String?  // Base64 face descriptor for recognition
+  enrolledAt  DateTime @default(now())
+
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  class      Class        @relation(fields: [classId], references: [id])
+  attendance Attendance[]
+
+  @@map("students")
+}
+
+model Teacher {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @unique @db.ObjectId
+  employeeId   String   @unique
+  qualification String?
+  specialization String?
+  joiningDate  DateTime @default(now())
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classes           Class[]
+  teacherAttendance TeacherAttendance[]
+  teachingLogs      TeachingLog[]
+
+  @@map("teachers")
+}
+
+model Class {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String   // e.g., "Grade 3-A"
+  grade     Int      // 1-8
+  section   String   // A, B, C
+  room      String?
+  capacity  Int      @default(40)
+  teacherId String?  @db.ObjectId
+  createdAt DateTime @default(now())
+
+  teacher      Teacher?      @relation(fields: [teacherId], references: [id])
+  students     Student[]
+  attendance   Attendance[]
+  teachingLogs TeachingLog[]
+
+  @@map("classes")
+}
+
+model Subject {
+  id   String @id @default(auto()) @map("_id") @db.ObjectId
+  name String @unique
+  code String @unique
+
+  teachingLogs TeachingLog[]
+
+  @@map("subjects")
+}
+
+model Attendance {
+  id        String           @id @default(auto()) @map("_id") @db.ObjectId
+  studentId String           @db.ObjectId
+  classId   String           @db.ObjectId
+  date      DateTime         @db.Date
+  status    AttendanceStatus @default(PRESENT)
+  markedBy  String?          // teacher userId
+  photoRef  String?          // path to captured photo
+  aiConfidence Float?        // AI recognition confidence score
+  isAiMarked   Boolean      @default(false)
+  notes     String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class   Class   @relation(fields: [classId], references: [id])
+
+  @@unique([studentId, date])
+  @@map("attendance")
+}
+
+model TeacherAttendance {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  teacherId String    @db.ObjectId
+  date      DateTime  @db.Date
+  timeIn    DateTime?
+  timeOut   DateTime?
+  status    AttendanceStatus @default(PRESENT)
+  notes     String?
+  createdAt DateTime  @default(now())
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, date])
+  @@map("teacher_attendance")
+}
+
+model TeachingLog {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  teacherId   String   @db.ObjectId
+  classId     String   @db.ObjectId
+  subjectId   String   @db.ObjectId
+  date        DateTime @db.Date
+  topicsCovered String  // Free text
+  objectives  String?
+  homework    String?
+  notes       String?
+  periodNumber Int     @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  class   Class   @relation(fields: [classId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+
+  @@map("teaching_logs")
+}
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  title     String
+  message   String
+  type      String   @default("info") // info, warning, success, error
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
